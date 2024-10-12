@@ -1,0 +1,146 @@
+.TH RCHK 1
+
+.SH NAME
+rchk \- remote node checker
+
+
+.SH SYNOPSIS
+.B rchk
+[\fI--units=<paths>\fR]
+\fI<command>\fR
+[\fI<args>\fR]
+
+
+.SH DESCRIPTION
+\fBrchk\fR runs user-defined scripts that generate and preprocess \fIreports\fR
+(files), which are subsequently compared against a known \fIbenchmark\fR (a
+report designated as "good"). While \fBrchk\fR is adaptable for a variety of
+purposes, it has some opinionated behavior stemming from its original purpose
+of monitoring the health and integrity of remote \fInodes\fR.
+
+
+.SH TERMINOLOGY
+
+.SS Hosts file
+Configuration file that typically resides outside of \fIunit\fR and contains
+\fInodes\fR for which reports are to be generated. \fBrchk\fR will look for
+this file in the current directory and when not found, it will traverse to
+parent directories until the file is found.
+
+.SS Unit
+Base directory in which \fBrchk\fR operates. It is mostly a collection of
+\fIcollectors\fR, \fIpreprocessors\fR and \fIreports\fR.
+
+The convention for naming units is "[c1.c2.c3...].<ext>" where cX are
+categories and <ext> is extension the \fIreports\fR will take. E.g.
+"config.sysctl.unified.conf" would indicate a \fIunit\fR that checks the sysctl
+configuration, likely including configuration in /etc/sysctl.d/* (unified), and
+the final reports will get the ".conf" extension.
+
+.SS Node
+Remote system for which \fIreports\fR are created.
+
+.SS Report
+Output of the \fIcollector\fR and \fIpreprocessor\fR scripts. While typically a
+human-readable plain text file, it can contain any data.
+
+This file will get its extension from the name of its \fIunit\fR. See the \fBUnit\fR
+section for more information.
+
+.SS Collector
+An executable (usually script) that runs against every node and creates
+\fIartifacts\fR. Collectors should do no or minimal preprocessing (typically to
+save bandwidth). They should also be the only component that accesses the
+nodes via network. It can be thought of as the stage 1 of creating \fIreports\fR.
+
+There is only one \fIcollector\fR for each \fIunit\fR and it is expected to be
+named "rchk.collect".
+
+\fICollector\fR has to be executable.
+
+.SS Filter
+An executable (usually a script) that preprocesses \fIartifacts\fR. Contrary to
+\fIcollectors\fR, \fIfilters\fR should never interact with nodes via the
+network. This separation of concerns is beneficial for safety and performance,
+especially during development of \fIunits\fR.
+
+There can be multiple \fIfilters\fR, each of which will create its own
+\fIartifact\fR. They are expected to be named
+"rchk[.<priority>][.<name>].filter", e.g. "rchk.10.normalize.filter"
+
+\fIFilters\fR have to be executable.
+
+.SS Artifact
+Output of the \fIcollector\fR or any \fIfilter\fR. The final \fIartifact\fR, after all filters are applied, is copied as the \fIreport\fR.
+
+.SS Benchmark
+A \fIreport\fR that is designated as "good" and other \fIreports\fR are compared to it.
+
+
+.SH COMMANDS
+
+All commands use the current working directory as the unit (unless \fI\-\-units\fR is used).
+
+.SS init
+Create a basic \fIunit\fR in the current directory. This directory has to be
+empty.
+
+.SS collect
+Run the \fIcollector\fR against all \fInodes\fR. This will not trigger any
+filters.
+
+.SS check
+Process all \fIfilters\fR on all \fIartifacts\fR, produce \fIreports\fR and
+compare them to the \fIbenchmark\fR.
+
+
+.SH UNIT STRUCTURE EXAMPLE
+
+Note: See \fBTERMINOLOGY\fR for descriptions.
+
+.B /config.sysctl.unified.txt
+    rchk.collect
+    rchk.010.simplify.filter
+    rchk.020.normalize.filter
+    rchk.benchmark.txt
+
+.B /config.sysctl.unified.txt/reports
+    web1.txt
+    web2.txt
+    web3.txt
+    
+.B /config.sysctl.unified.txt/artifacts
+    web1.010.simplify.txt
+    web1.020.normalize.txt
+    web1.raw.txt
+    web3.010.simplify.txt
+    web3.020.normalize.txt
+    web3.raw.txt
+    web2.010.simplify.txt
+    web2.020.normalize.txt
+    web2.raw.txt
+
+
+.SH OPTIONS
+
+.SS Non-specific options:
+
+.TP
+.B \-q, \-\-quiet
+Only print errors.
+
+.TP
+.B \-u \fI<paths>\fR, \-\-units=\fI<paths>\fR
+Use \fIpaths\fR as \fIunits\fR instead of the current working directory.
+
+
+.SS Options for the \fBcheck\fR command:
+
+.B \-w, \-\-watch
+Watch filter files for any changes and re-run check as needed.
+
+.SH AUTHOR
+Ondra Simek <me@ondrejsimek.com>
+
+.SH LICENSE
+See the LICENSE file in the project root directory for full details.
