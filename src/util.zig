@@ -14,7 +14,7 @@ pub const LogLevel = enum(i8) {
         .{ "warn", LogLevel.Warn },
         .{ "", LogLevel.Default },
         .{ "verbose", LogLevel.Verbose },
-        .{ "debug", LogLevel.Verbose },
+        .{ "debug", LogLevel.Debug },
     });
     pub fn parse(text: []const u8) LogLevel {
         return lut.get(text) orelse LogLevel.Default;

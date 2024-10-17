@@ -24,8 +24,7 @@ pub fn main() !void {
     const global_logger =
         util.getLogger(
         std.io.getStdOut().writer(),
-        // try getLogLevel(allocator),
-        util.LogLevel.Debug,
+        try getLogLevel(allocator),
         true,
         .{ .host = null, .collector = null },
     );
