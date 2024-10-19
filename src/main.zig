@@ -16,14 +16,14 @@ pub fn main() !void {
     var args = try ParsedArgs.init(allocator);
     defer args.deinit();
 
-    const global_logger = Logger.init(
+    const logger = Logger.init(
         std.io.getStdOut().writer(),
         getLogLevel(),
         true,
     );
-    global_logger.debug("hello", .{});
+    logger.debug("hello", .{});
 
-    printInitialDebugInfo(global_logger, args);
+    printInitialDebugInfo(logger, args);
 
     const defUnits: []const []const u8 = &.{"."};
 
@@ -38,11 +38,10 @@ pub fn main() !void {
         Command.Check => {
             for (units) |unit_path| {
                 for (targets) |target| {
-                    const logger = global_logger.scoped(.{
+                    try checkUnit(allocator, unit_path, target, logger.scoped(.{
                         .host = target,
                         .collector = unit_path,
-                    });
-                    try checkUnit(allocator, unit_path, target, logger);
+                    }));
                 }
             }
         },
