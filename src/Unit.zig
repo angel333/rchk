@@ -94,7 +94,7 @@ const File = std.fs.File;
 const Dir = std.fs.Dir;
 const Allocator = std.mem.Allocator;
 
-const util = @import("util.zig");
+const Logger = @import("Logger.zig");
 const Config = @import("Config.zig");
 
 // tests won't run unless they're referenced

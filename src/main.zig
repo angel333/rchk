@@ -6,8 +6,8 @@ const Config = @import("Config.zig");
 const ParsedArgs = @import("ParsedArgs.zig");
 const Command = ParsedArgs.Command;
 const Unit = @import("Unit.zig");
-const util = @import("util.zig");
-const Logger = @import("util.zig").Logger;
+const Logger = @import("Logger.zig");
+const LogLevel = Logger.LogLevel;
 
 pub fn main() !void {
     const allocator = std.heap.page_allocator;
@@ -15,11 +15,10 @@ pub fn main() !void {
     var args = try ParsedArgs.init(allocator);
     defer args.deinit();
 
-    const global_logger = util.getLogger(
+    const global_logger = Logger.init(
         std.io.getStdOut().writer(),
         getLogLevel(),
         true,
-        .{ .host = null, .collector = null },
     );
 
     printInitialDebugInfo(global_logger, args);
@@ -37,7 +36,7 @@ pub fn main() !void {
         Command.Check => {
             for (units) |unit_path| {
                 for (targets) |target| {
-                    const logger = global_logger.withArgs(.{
+                    const logger = global_logger.scoped(.{
                         .host = target,
                         .collector = unit_path,
                     });
@@ -81,7 +80,7 @@ fn getHosts() ![]const []const u8 {
     return hosts;
 }
 
-fn getLogLevel() util.LogLevel {
+fn getLogLevel() Logger.LogLevel {
     var buf: [0x20]u8 = undefined; // enough for one word
     const GetEnvVarOwnedError = std.process.GetEnvVarOwnedError;
     var buf_allocator = std.heap.FixedBufferAllocator.init(&buf);
@@ -94,7 +93,7 @@ fn getLogLevel() util.LogLevel {
         => "",
         GetEnvVarOwnedError.InvalidWtf8 => @panic("env var encoding error"),
     };
-    return util.LogLevel.parse(env_value);
+    return Logger.LogLevel.parse(env_value);
 }
 
 inline fn printInitialDebugInfo(global_logger: Logger, args: ParsedArgs) void {
