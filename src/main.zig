@@ -10,7 +10,8 @@ const Logger = @import("Logger.zig");
 const LogLevel = Logger.LogLevel;
 
 pub fn main() !void {
-    const allocator = std.heap.page_allocator;
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    const allocator = gpa.allocator();
 
     var args = try ParsedArgs.init(allocator);
     defer args.deinit();
