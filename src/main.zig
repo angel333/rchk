@@ -10,18 +10,19 @@ const Logger = @import("Logger.zig");
 const LogLevel = Logger.LogLevel;
 
 pub fn main() !void {
-    const allocator = std.heap.page_allocator;
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    const allocator = gpa.allocator();
 
     var args = try ParsedArgs.init(allocator);
     defer args.deinit();
 
-    const global_logger = Logger.init(
+    const logger = Logger.init(
         std.io.getStdOut().writer(),
         getLogLevel(),
         true,
     );
 
-    printInitialDebugInfo(global_logger, args);
+    printInitialDebugInfo(logger, args);
 
     const defUnits: []const []const u8 = &.{"."};
 
@@ -36,11 +37,10 @@ pub fn main() !void {
         Command.Check => {
             for (units) |unit_path| {
                 for (targets) |target| {
-                    const logger = global_logger.scoped(.{
+                    try checkUnit(allocator, unit_path, target, logger.scoped(.{
                         .host = target,
                         .collector = unit_path,
-                    });
-                    try checkUnit(allocator, unit_path, target, logger);
+                    }));
                 }
             }
         },
