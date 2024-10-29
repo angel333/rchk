@@ -5,6 +5,7 @@ allocator: Allocator,
 fifo: FifoType,
 path_buf: [fs.MAX_NAME_BYTES]u8,
 extension: []const u8,
+artifacts_dir: Dir,
 
 pub fn open(dir: Dir, allocator: Allocator) !Unit {
     var path_buf: [fs.MAX_NAME_BYTES]u8 = undefined;
@@ -15,21 +16,59 @@ pub fn open(dir: Dir, allocator: Allocator) !Unit {
         break :blk it.next().?;
     };
 
+    const artifacts_dir = try dir.openDir(Config.DIRNAME_ARTIFACTS, .{});
+
     return Unit{
         .dir = dir,
         .allocator = allocator,
         .fifo = FifoType.init(),
         .path_buf = path_buf,
         .extension = extension,
+        .artifacts_dir = artifacts_dir,
     };
 }
 
-pub fn deinit(self: Unit) void {
+pub fn deinit(self: *Unit) void {
+    self.artifacts_dir.close();
     self.fifo.deinit();
 }
 
 pub fn iterateFilters(self: Unit) !Filter.Iterator {
     return try Filter.Iterator.init(self.dir);
+}
+
+pub inline fn artifactFileTask(self: Unit, target: []const u8) FileTask {
+    var file_name_buf: [std.fs.MAX_NAME_BYTES]u8 = undefined;
+    const file_name =
+        std.fmt.bufPrint(
+        &file_name_buf,
+        Config.FILENAME_ARTIFACT_FMT,
+        .{ target, self.extension },
+    ) catch |e| {
+        switch (e) {
+            std.fmt.BufPrintError.NoSpaceLeft => {
+                @panic("buffer overflow");
+            },
+        }
+    };
+    return FileTask.init(self.allocator, file_name, self.artifacts_dir);
+}
+
+pub inline fn benchmarkFileTask(self: Unit) FileTask {
+    var file_name_buf: [std.fs.MAX_NAME_BYTES]u8 = undefined;
+    const file_name =
+        std.fmt.bufPrint(
+        &file_name_buf,
+        Config.FILENAME_BENCHMARK_FMT,
+        .{self.extension},
+    ) catch |e| {
+        switch (e) {
+            std.fmt.BufPrintError.NoSpaceLeft => {
+                @panic("buffer overflow");
+            },
+        }
+    };
+    return FileTask.init(self.allocator, file_name, self.dir);
 }
 
 pub const Filter = struct {
@@ -85,6 +124,49 @@ pub const Filter = struct {
             }));
         }
     };
+};
+
+pub const FileTask = struct {
+    file_name: [std.fs.MAX_NAME_BYTES:0]u8,
+    dir: Dir,
+    content: ?[]u8,
+    inner: struct {
+        allocator: Allocator,
+    },
+
+    pub fn init(
+        allocator: Allocator,
+        file_name: []const u8,
+        dir: Dir,
+    ) FileTask {
+        var t: FileTask = .{
+            .file_name = undefined,
+            .dir = dir,
+            .content = null,
+            .inner = .{ .allocator = allocator },
+        };
+        _ = std.fmt.bufPrintZ(&t.file_name, "{s}", .{file_name}) catch |e| {
+            switch (e) {
+                std.fmt.BufPrintError.NoSpaceLeft => {
+                    @panic("buffer overflow");
+                },
+            }
+        };
+        return t;
+    }
+
+    pub fn deinit(self: *FileTask) void {
+        if (null != self.content)
+            self.inner.allocator.free(self.content);
+    }
+
+    /// Content is owned by the struct
+    pub fn load(self: *FileTask) !void {
+        const file = try self.dir.openFileZ(&self.file_name, .{});
+        defer file.close();
+        const reader = file.reader();
+        self.content = try reader.readAllAlloc(self.inner.allocator, Config.MAX_FILE_SIZE);
+    }
 };
 
 const std = @import("std");

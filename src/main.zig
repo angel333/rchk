@@ -36,6 +36,7 @@ pub fn main() !void {
         },
         Command.Check => {
             for (units) |unit_path| {
+                logger.dbg("Checking dir: {s}", .{unit_path});
                 for (targets) |target| {
                     try checkUnit(allocator, unit_path, target, logger.scoped(.{
                         .host = target,
@@ -47,27 +48,43 @@ pub fn main() !void {
     }
 }
 
+inline fn loadFileTask(task: *Unit.FileTask, logger: Logger) !void {
+    logger.debug("Loading file: {s}", .{task.file_name});
+    task.load() catch |e| switch (e) {
+        //std.fs.File.ReadError.AccessDenied
+        std.fs.File.OpenError.FileNotFound => {
+            logger.fail("File not found: {s}", .{task.file_name});
+            return;
+        },
+        else => {
+            logger.fail("Couldn't load file: {s}", .{task.file_name});
+            return e;
+        },
+    };
+}
+
 fn checkUnit(
     allocator: Allocator,
     unit_path: []const u8,
     target: []const u8,
     logger: Logger,
 ) !void {
-    logger.dbg("Checking dir: {s}", .{unit_path});
-
-    // open unit
     var unit_dir = try std.fs.cwd().openDir(unit_path, .{ .iterate = true });
     defer unit_dir.close();
     var unit = try Unit.open(unit_dir, allocator);
     defer unit.deinit();
 
-    // filter
-    var filters = try unit.iterateFilters();
-    while (try filters.next()) |filter_filename| {
-        logger.dbg("Using filter: {s}", .{filter_filename});
-        // todo filter
+    var benchmark = unit.benchmarkFileTask();
+    var artifact = unit.artifactFileTask(target);
+
+    try loadFileTask(&benchmark, logger);
+    try loadFileTask(&artifact, logger);
+
+    if (!std.mem.eql(u8, benchmark.content.?, artifact.content.?)) {
+        logger.fail("Artifact doesn't match!", .{});
+    } else {
+        logger.ok("Artifact matches.", .{});
     }
-    _ = target;
 }
 
 // TODO(2): hardcoded for now
