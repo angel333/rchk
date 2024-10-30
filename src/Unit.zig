@@ -50,7 +50,7 @@ pub inline fn artifactFileTask(self: Unit, target: []const u8) FileTask {
         .{ target, self.extension },
     ) catch |e| {
         switch (e) {
-            std.fmt.BufPrintError.NoSpaceLeft => {
+            error.NoSpaceLeft => {
                 @panic("buffer overflow");
             },
         }
@@ -67,7 +67,7 @@ pub inline fn benchmarkFileTask(self: Unit) FileTask {
         .{self.extension},
     ) catch |e| {
         switch (e) {
-            std.fmt.BufPrintError.NoSpaceLeft => {
+            error.NoSpaceLeft => {
                 @panic("buffer overflow");
             },
         }
@@ -98,12 +98,12 @@ pub const Filter = struct {
                     var exec_path: [std.fs.MAX_NAME_BYTES:0]u8 = undefined;
                     // TODO(2): only works for .
                     _ = std.fmt.bufPrintZ(&exec_path, "./{s}", .{entry.name}) catch |e| switch (e) {
-                        std.fmt.BufPrintError.NoSpaceLeft => {
+                        error.NoSpaceLeft => {
                             @panic("buffer overflow");
                         },
                     };
                     _ = std.fmt.bufPrintZ(&name, "{s}", .{entry.name}) catch |e| switch (e) {
-                        std.fmt.BufPrintError.NoSpaceLeft => {
+                        error.NoSpaceLeft => {
                             @panic("buffer overflow");
                         },
                     };
@@ -165,14 +165,14 @@ pub const FileTask = struct {
         };
         _ = std.fmt.bufPrintZ(&t.file_name, "{s}", .{file_name}) catch |e| {
             switch (e) {
-                std.fmt.BufPrintError.NoSpaceLeft => {
+                error.NoSpaceLeft => {
                     @panic("buffer overflow");
                 },
             }
         };
         _ = std.fmt.bufPrintZ(&t.sub_dir, "{s}", .{sub_dir}) catch |e| {
             switch (e) {
-                std.fmt.BufPrintError.NoSpaceLeft => {
+                error.NoSpaceLeft => {
                     @panic("buffer overflow");
                 },
             }

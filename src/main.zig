@@ -49,7 +49,7 @@ inline fn loadFileTask(task: *Unit.FileTask, logger: Logger) !void {
     logger.debug("Loading file: {s}", .{task.file_name});
     task.load() catch |e| switch (e) {
         //std.fs.File.ReadError.AccessDenied
-        std.fs.File.OpenError.FileNotFound => {
+        error.FileNotFound => {
             logger.fail("File not found: {s}", .{task.file_name});
             return;
         },
@@ -115,16 +115,15 @@ fn getHosts() ![]const []const u8 {
 
 fn getLogLevel() Logger.LogLevel {
     var buf: [0x20]u8 = undefined; // enough for one word
-    const GetEnvVarOwnedError = std.process.GetEnvVarOwnedError;
     var buf_allocator = std.heap.FixedBufferAllocator.init(&buf);
     const allocator = buf_allocator.allocator();
     // no deinit or free with fixed buffer
     const env_value = std.process.getEnvVarOwned(allocator, "LOG_LEVEL") catch |e|
         switch (e) {
-        GetEnvVarOwnedError.OutOfMemory,
-        GetEnvVarOwnedError.EnvironmentVariableNotFound,
+        error.OutOfMemory,
+        error.EnvironmentVariableNotFound,
         => "",
-        GetEnvVarOwnedError.InvalidWtf8 => @panic("env var encoding error"),
+        error.InvalidWtf8 => @panic("env var encoding error"),
     };
     return Logger.LogLevel.parse(env_value);
 }
