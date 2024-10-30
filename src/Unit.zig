@@ -11,7 +11,8 @@ artifacts_dir: Dir,
 pub fn open(dir: Dir, allocator: Allocator) !Unit {
     var path_buf: [fs.MAX_NAME_BYTES]u8 = undefined;
 
-    const path = try dir.realpath(".", &path_buf);
+    const path = dir.realpath(".", &path_buf) catch
+        @panic("cannot get real path of unit directory");
 
     const extension: []const u8 = blk: {
         var it = std.mem.splitBackwardsScalar(u8, path, '.');
