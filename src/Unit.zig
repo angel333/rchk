@@ -4,15 +4,22 @@ dir: Dir,
 allocator: Allocator,
 fifo: FifoType,
 path_buf: [fs.MAX_NAME_BYTES]u8,
+name: []const u8,
 extension: []const u8,
 artifacts_dir: Dir,
 
 pub fn open(dir: Dir, allocator: Allocator) !Unit {
     var path_buf: [fs.MAX_NAME_BYTES]u8 = undefined;
 
+    const path = try dir.realpath(".", &path_buf);
+
     const extension: []const u8 = blk: {
-        const path = try dir.realpath(".", &path_buf);
         var it = std.mem.splitBackwardsScalar(u8, path, '.');
+        break :blk it.next().?;
+    };
+
+    const name: []const u8 = blk: {
+        var it = std.mem.splitBackwardsScalar(u8, path, '/');
         break :blk it.next().?;
     };
 
@@ -23,6 +30,7 @@ pub fn open(dir: Dir, allocator: Allocator) !Unit {
         .allocator = allocator,
         .fifo = FifoType.init(),
         .path_buf = path_buf,
+        .name = name,
         .extension = extension,
         .artifacts_dir = artifacts_dir,
     };

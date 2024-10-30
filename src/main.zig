@@ -38,10 +38,7 @@ pub fn main() !void {
             for (units) |unit_path| {
                 logger.dbg("Checking dir: {s}", .{unit_path});
                 for (targets) |target| {
-                    try checkUnit(allocator, unit_path, target, logger.scoped(.{
-                        .host = target,
-                        .collector = unit_path,
-                    }));
+                    try checkUnit(allocator, unit_path, target, logger);
                 }
             }
         },
@@ -74,15 +71,20 @@ fn checkUnit(
     var unit = try Unit.open(unit_dir, allocator);
     defer unit.deinit();
 
+    const unit_logger = logger.scoped(.{
+        .host = target,
+        .collector = unit.name,
+    });
+
     var benchmark = unit.benchmarkFileTask();
     var artifact = unit.artifactFileTask(target);
 
-    try loadFileTask(&benchmark, logger);
-    try loadFileTask(&artifact, logger);
+    try loadFileTask(&benchmark, unit_logger);
+    try loadFileTask(&artifact, unit_logger);
 
     var filters = try unit.iterateFilters();
     while (try filters.next()) |filter| {
-        logger.dbg(
+        unit_logger.dbg(
             "Filtering '{s}' with '{s}'",
             .{ artifact.file_name, filter.file_name },
         );
@@ -90,9 +92,9 @@ fn checkUnit(
     }
 
     if (!std.mem.eql(u8, benchmark.content.?, artifact.content.?)) {
-        logger.fail("Artifact doesn't match!", .{});
+        unit_logger.fail("Artifact doesn't match!", .{});
     } else {
-        logger.ok("Artifact matches.", .{});
+        unit_logger.ok("Artifact matches.", .{});
     }
 }
 
