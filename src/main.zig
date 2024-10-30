@@ -68,7 +68,7 @@ fn checkUnit(
 ) !void {
     var unit_dir = try std.fs.cwd().openDir(unit_path, .{ .iterate = true });
     defer unit_dir.close();
-    var unit = try Unit.open(unit_dir, allocator);
+    var unit = Unit.open(unit_dir, allocator);
     defer unit.deinit();
 
     const unit_logger = logger.scoped(.{
@@ -81,6 +81,11 @@ fn checkUnit(
 
     try loadFileTask(&benchmark, unit_logger);
     try loadFileTask(&artifact, unit_logger);
+
+    if ((null == benchmark.content) or (null == artifact.content)) {
+        unit_logger.fail("Comparison not performed.", .{});
+        return;
+    }
 
     var filters = try unit.iterateFilters();
     while (try filters.next()) |filter| {

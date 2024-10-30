@@ -6,9 +6,8 @@ fifo: FifoType,
 path_buf: [fs.MAX_NAME_BYTES]u8,
 name: []const u8,
 extension: []const u8,
-artifacts_dir: Dir,
 
-pub fn open(dir: Dir, allocator: Allocator) !Unit {
+pub fn open(dir: Dir, allocator: Allocator) Unit {
     var path_buf: [fs.MAX_NAME_BYTES]u8 = undefined;
 
     const path = dir.realpath(".", &path_buf) catch
@@ -24,8 +23,6 @@ pub fn open(dir: Dir, allocator: Allocator) !Unit {
         break :blk it.next().?;
     };
 
-    const artifacts_dir = try dir.openDir(Config.DIRNAME_ARTIFACTS, .{});
-
     return Unit{
         .dir = dir,
         .allocator = allocator,
@@ -33,12 +30,10 @@ pub fn open(dir: Dir, allocator: Allocator) !Unit {
         .path_buf = path_buf,
         .name = name,
         .extension = extension,
-        .artifacts_dir = artifacts_dir,
     };
 }
 
 pub fn deinit(self: *Unit) void {
-    self.artifacts_dir.close();
     self.fifo.deinit();
 }
 
@@ -60,7 +55,7 @@ pub inline fn artifactFileTask(self: Unit, target: []const u8) FileTask {
             },
         }
     };
-    return FileTask.init(self.allocator, file_name, self.artifacts_dir);
+    return FileTask.init(self.allocator, file_name, Config.DIRNAME_ARTIFACTS, self.dir);
 }
 
 pub inline fn benchmarkFileTask(self: Unit) FileTask {
@@ -77,7 +72,7 @@ pub inline fn benchmarkFileTask(self: Unit) FileTask {
             },
         }
     };
-    return FileTask.init(self.allocator, file_name, self.dir);
+    return FileTask.init(self.allocator, file_name, ".", self.dir);
 }
 
 /// here be some dragons
@@ -148,7 +143,8 @@ pub const Filter = struct {
 
 pub const FileTask = struct {
     file_name: [std.fs.MAX_NAME_BYTES:0]u8,
-    dir: Dir,
+    unit_dir: Dir,
+    sub_dir: [std.fs.MAX_NAME_BYTES:0]u8,
     content: ?[]u8,
     inner: struct {
         allocator: Allocator,
@@ -157,15 +153,24 @@ pub const FileTask = struct {
     pub fn init(
         allocator: Allocator,
         file_name: []const u8,
-        dir: Dir,
+        sub_dir: []const u8,
+        unit_dir: Dir,
     ) FileTask {
         var t: FileTask = .{
             .file_name = undefined,
-            .dir = dir,
+            .unit_dir = unit_dir,
+            .sub_dir = undefined,
             .content = null,
             .inner = .{ .allocator = allocator },
         };
         _ = std.fmt.bufPrintZ(&t.file_name, "{s}", .{file_name}) catch |e| {
+            switch (e) {
+                std.fmt.BufPrintError.NoSpaceLeft => {
+                    @panic("buffer overflow");
+                },
+            }
+        };
+        _ = std.fmt.bufPrintZ(&t.sub_dir, "{s}", .{sub_dir}) catch |e| {
             switch (e) {
                 std.fmt.BufPrintError.NoSpaceLeft => {
                     @panic("buffer overflow");
@@ -182,8 +187,12 @@ pub const FileTask = struct {
 
     /// Content is owned by the struct
     pub fn load(self: *FileTask) !void {
-        const file = try self.dir.openFileZ(&self.file_name, .{});
+        var subdir = try self.unit_dir.openDirZ(self.sub_dir[0..], .{});
+        defer subdir.close();
+
+        const file = try subdir.openFileZ(&self.file_name, .{});
         defer file.close();
+
         const reader = file.reader();
         self.content = try reader.readAllAlloc(self.inner.allocator, Config.MAX_FILE_SIZE);
     }
