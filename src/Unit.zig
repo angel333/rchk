@@ -187,6 +187,9 @@ pub const FileTask = struct {
 
     /// Content is owned by the struct
     pub fn load(self: *FileTask) !void {
+        // re-loading would leak memory
+        assert(null == self.content);
+
         var subdir = try self.unit_dir.openDirZ(self.sub_dir[0..], .{});
         defer subdir.close();
 
