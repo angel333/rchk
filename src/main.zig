@@ -80,6 +80,15 @@ fn checkUnit(
     try loadFileTask(&benchmark, logger);
     try loadFileTask(&artifact, logger);
 
+    var filters = try unit.iterateFilters();
+    while (try filters.next()) |filter| {
+        logger.dbg(
+            "Filtering '{s}' with '{s}'",
+            .{ artifact.file_name, filter.file_name },
+        );
+        try artifact.filterWith(filter, target);
+    }
+
     if (!std.mem.eql(u8, benchmark.content.?, artifact.content.?)) {
         logger.fail("Artifact doesn't match!", .{});
     } else {

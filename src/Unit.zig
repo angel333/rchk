@@ -71,31 +71,42 @@ pub inline fn benchmarkFileTask(self: Unit) FileTask {
     return FileTask.init(self.allocator, file_name, self.dir);
 }
 
+/// here be some dragons
 pub const Filter = struct {
-    name: []const u8,
-
-    pub fn run(self: Filter, reader: anytype, writer: anytype) !void {
-        _ = self;
-        _ = reader;
-        _ = writer;
-        // TODO run it
-        unreachable;
-    }
+    file_name: [std.fs.MAX_NAME_BYTES:0]u8,
+    exec_path: [std.fs.MAX_NAME_BYTES:0]u8,
 
     // Find filters in a given directory.
     pub const Iterator = struct {
         inner: Dir.Iterator,
+        dir: Dir,
         pub fn init(dir: Dir) !Iterator {
             const inner = dir.iterate();
             return Iterator{
+                .dir = dir,
                 .inner = inner,
             };
         }
-        pub fn next(self: *Iterator) !?[]const u8 {
+        pub fn next(self: *Iterator) !?Filter {
             while (try self.inner.next()) |entry| {
                 if (self.match(entry)) {
-                    // TODO(3): Perhaps we could pass fn instead.
-                    return entry.name;
+                    var name: [std.fs.MAX_NAME_BYTES:0]u8 = undefined;
+                    var exec_path: [std.fs.MAX_NAME_BYTES:0]u8 = undefined;
+                    // TODO(2): only works for .
+                    _ = std.fmt.bufPrintZ(&exec_path, "./{s}", .{entry.name}) catch |e| switch (e) {
+                        std.fmt.BufPrintError.NoSpaceLeft => {
+                            @panic("buffer overflow");
+                        },
+                    };
+                    _ = std.fmt.bufPrintZ(&name, "{s}", .{entry.name}) catch |e| switch (e) {
+                        std.fmt.BufPrintError.NoSpaceLeft => {
+                            @panic("buffer overflow");
+                        },
+                    };
+                    return Filter{
+                        .exec_path = exec_path,
+                        .file_name = name,
+                    };
                 }
             }
             return null;
@@ -167,11 +178,46 @@ pub const FileTask = struct {
         const reader = file.reader();
         self.content = try reader.readAllAlloc(self.inner.allocator, Config.MAX_FILE_SIZE);
     }
+
+    pub fn filterWith(self: *FileTask, filter: Filter, target: []const u8) !void {
+        var argvtest: [2][]const u8 = undefined;
+        argvtest[0] = filter.exec_path[0..];
+        argvtest[1] = target;
+
+        var filter_process = std.process.Child.init(
+            &argvtest,
+            self.inner.allocator,
+        );
+        filter_process.stdin_behavior = .Pipe;
+        filter_process.stdout_behavior = .Pipe;
+        try filter_process.spawn();
+
+        assert(null != self.content);
+        assert(null != filter_process.stdin);
+        assert(null != filter_process.stdout);
+
+        try filter_process.stdin.?.writeAll(self.content.?);
+        filter_process.stdin.?.close();
+
+        // TODO(2): waiting doesn't work?
+        // const exit_code = try filter_process.wait();
+        // _ = exit_code;
+
+        const new_buf = try filter_process.stdout.?.readToEndAlloc(
+            self.inner.allocator,
+            Config.MAX_FILE_SIZE,
+        );
+
+        // replace content
+        self.inner.allocator.free(self.content.?);
+        self.content = new_buf;
+    }
 };
 
 const std = @import("std");
 const fs = std.fs;
 const expect = std.testing.expect;
+const assert = std.debug.assert;
 const File = std.fs.File;
 const Dir = std.fs.Dir;
 const Allocator = std.mem.Allocator;
